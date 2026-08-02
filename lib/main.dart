@@ -319,7 +319,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulWidget(
+      builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
             title: Text(h ? 'नया कार्य जोड़ें' : 'Create New Task'),
