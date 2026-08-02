@@ -23,11 +23,6 @@ jobs:
       with:
         channel: 'stable'
 
-    - name: Rebuild Android Clean
-      run: |
-        rm -rf android
-        flutter create . --platforms=android --org=com.manoj.tasktracker
-
     - name: Install Dependencies
       run: flutter pub get
 
