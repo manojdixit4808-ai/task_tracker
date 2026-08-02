@@ -1,5 +1,5 @@
 name: task_tracker
-description: A new Flutter project.
+description: Manoj Daily Task Tracker App
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -12,7 +12,6 @@ dependencies:
     sdk: flutter
   shared_preferences: ^2.2.2
   intl: ^0.19.0
-  table_calendar: ^3.0.9
 
 dev_dependencies:
   flutter_test:
