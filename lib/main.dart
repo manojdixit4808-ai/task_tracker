@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 
@@ -17,7 +16,7 @@ class TaskApp extends StatefulWidget {
 
 class _TaskAppState extends State<TaskApp> {
   bool _isDarkMode = false;
-  bool _isHindi = false; // Language Toggle
+  bool _isHindi = false;
   Color _primaryColor = Colors.indigo;
 
   void _toggleTheme() {
@@ -60,7 +59,6 @@ class _TaskAppState extends State<TaskApp> {
   }
 }
 
-// ==================== LOGIN SCREEN ====================
 class LoginScreen extends StatefulWidget {
   final VoidCallback onToggleTheme;
   final bool isDarkMode;
@@ -146,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
         actions: [
           TextButton(
             onPressed: widget.onToggleLanguage,
-            child: Text(h ? "English" : "हिंदी", style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(h ? "English" : "हिंदी", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ),
         ],
       ),
@@ -163,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              Text(h ? "अपने दैनिक कार्यों को प्रबंधित करने के लिए लॉगिन करें" : "Login to manage your daily productivity"),
+              Text(h ? "अपने दैनिक कार्यों को प्रबंधित करने के लिए लॉगिन करें" : "Login to manage your daily tasks"),
               const SizedBox(height: 32),
               TextField(
                 controller: _usernameController,
@@ -193,7 +191,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ==================== MAIN TASK SCREEN ====================
 class MainTaskScreen extends StatefulWidget {
   final String username;
   final VoidCallback onToggleTheme;
@@ -219,11 +216,8 @@ class MainTaskScreen extends StatefulWidget {
 }
 
 class _MainTaskScreenState extends State<MainTaskScreen> {
-  int _currentIndex = 0;
   List<Map<String, dynamic>> _tasks = [];
   String _selectedCategory = 'All';
-  DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay;
 
   @override
   void initState() {
@@ -313,20 +307,20 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
   void _showAddTaskDialog() {
     bool h = widget.isHindi;
     final titleController = TextEditingController();
-    String category = h ? 'व्यक्तिगत' : 'Personal';
-    String priority = h ? 'मध्यम' : 'Medium';
+    List<String> categories = h 
+        ? ['व्यक्तिगत', 'कार्य', 'फिटनेस', 'पढ़ाई', 'खरीदारी']
+        : ['Personal', 'Work', 'Fitness', 'Study', 'Shopping'];
+    List<String> priorities = h
+        ? ['उच्च', 'मध्यम', 'कम']
+        : ['High', 'Medium', 'Low'];
+
+    String category = categories[0];
+    String priority = priorities[1];
 
     showDialog(
       context: context,
       builder: (context) => StatefulWidget(
         builder: (context, setDialogState) {
-          List<String> categories = h 
-              ? ['व्यक्तिगत', 'कार्य', 'फिटनेस', 'पढ़ाई', 'खरीदारी']
-              : ['Personal', 'Work', 'Fitness', 'Study', 'Shopping'];
-          List<String> priorities = h
-              ? ['उच्च', 'मध्यम', 'कम']
-              : ['High', 'Medium', 'Low'];
-
           return AlertDialog(
             title: Text(h ? 'नया कार्य जोड़ें' : 'Create New Task'),
             content: SingleChildScrollView(
@@ -365,6 +359,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
                       'isDone': false,
                       'category': category,
                       'priority': priority,
+                      'date': DateFormat('dd MMM yyyy').format(DateTime.now()),
                     });
                   });
                   _saveTasks();
@@ -389,8 +384,29 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
         ? ['सभी', 'व्यक्तिगत', 'कार्य', 'फिटनेस', 'पढ़ाई', 'खरीदारी']
         : ['All', 'Personal', 'Work', 'Fitness', 'Study', 'Shopping'];
 
-    List<Widget> pages = [
-      Column(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Manoj's Tasks"),
+        actions: [
+          TextButton(
+            onPressed: widget.onToggleLanguage,
+            child: Text(h ? "English" : "हिंदी", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.palette),
+            onPressed: _showColorPicker,
+          ),
+          IconButton(
+            icon: Icon(widget.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            onPressed: widget.onToggleTheme,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+          ),
+        ],
+      ),
+      body: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(16),
@@ -434,84 +450,41 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: _tasks.length,
-              itemBuilder: (context, idx) {
-                final task = _tasks[idx];
-                return Card(
-                  child: ListTile(
-                    leading: Checkbox(
-                      value: task['isDone'],
-                      onChanged: (val) {
-                        setState(() => _tasks[idx]['isDone'] = val);
-                        _saveTasks();
-                      },
-                    ),
-                    title: Text(
-                      task['title'],
-                      style: TextStyle(
-                        decoration: task['isDone'] ? TextDecoration.lineThrough : TextDecoration.none,
-                      ),
-                    ),
-                    subtitle: Text('${task['category']} • ${task['priority']}'),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () {
-                        setState(() => _tasks.removeAt(idx));
-                        _saveTasks();
-                      },
-                    ),
+            child: _tasks.isEmpty
+                ? Center(child: Text(h ? 'कोई कार्य नहीं मिला!' : 'No tasks found!'))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _tasks.length,
+                    itemBuilder: (context, idx) {
+                      final task = _tasks[idx];
+                      return Card(
+                        child: ListTile(
+                          leading: Checkbox(
+                            value: task['isDone'],
+                            onChanged: (val) {
+                              setState(() => _tasks[idx]['isDone'] = val);
+                              _saveTasks();
+                            },
+                          ),
+                          title: Text(
+                            task['title'],
+                            style: TextStyle(
+                              decoration: task['isDone'] ? TextDecoration.lineThrough : TextDecoration.none,
+                            ),
+                          ),
+                          subtitle: Text('${task['category']} • ${task['priority']} • ${task['date'] ?? ''}'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () {
+                              setState(() => _tasks.removeAt(idx));
+                              _saveTasks();
+                            },
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
-        ],
-      ),
-      TableCalendar(
-        firstDay: DateTime.utc(2020, 10, 16),
-        lastDay: DateTime.utc(2030, 3, 14),
-        focusedDay: _focusedDay,
-        selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-        onDaySelected: (selectedDay, focusedDay) {
-          setState(() {
-            _selectedDay = selectedDay;
-            _focusedDay = focusedDay;
-          });
-        },
-      ),
-    ];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Manoj's Daily Tasks"),
-        actions: [
-          TextButton(
-            onPressed: widget.onToggleLanguage,
-            child: Text(h ? "English" : "हिंदी", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-          ),
-          IconButton(
-            icon: const Icon(Icons.palette),
-            onPressed: _showColorPicker,
-          ),
-          IconButton(
-            icon: Icon(widget.isDarkMode ? Icons.light_mode : Icons.dark_mode),
-            onPressed: widget.onToggleTheme,
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-          ),
-        ],
-      ),
-      body: pages[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (idx) => setState(() => _currentIndex = idx),
-        items: [
-          BottomNavigationBarItem(icon: const Icon(Icons.list), label: h ? 'कार्य' : 'Tasks'),
-          BottomNavigationBarItem(icon: const Icon(Icons.calendar_month), label: h ? 'कैलेंडर' : 'Calendar'),
         ],
       ),
       floatingActionButton: FloatingActionButton(
