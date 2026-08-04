@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter/services.dart';
 
 void main() {
   runApp(const TaskApp());
@@ -246,9 +247,15 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
           task['alertShown'] != true) {
         task['alertShown'] = true;
         _saveTasks();
+        _playAlarmSoundAndVibration();
         _showTaskAlertDialog(task['title']);
       }
     }
+  }
+
+  void _playAlarmSoundAndVibration() {
+    SystemSound.play(SystemSoundType.click);
+    HapticFeedback.vibrate();
   }
 
   void _showTaskAlertDialog(String title) {
@@ -257,7 +264,13 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(h ? '⏰ कार्य का समय हो गया है!' : '⏰ Task Reminder!'),
+        title: Row(
+          children: [
+            const Icon(Icons.alarm_on, color: Colors.red, size: 28),
+            const SizedBox(width: 8),
+            Text(h ? 'कार्य का समय हो गया!' : 'Task Reminder!'),
+          ],
+        ),
         content: Text('${h ? "कार्य:" : "Task:"} $title'),
         actions: [
           ElevatedButton(
