@@ -529,7 +529,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
                     padding: const EdgeInsets.all(12),
                     itemCount: _tasks.length,
                     itemBuilder: (context, idx) {
-                      final task = _tasks.maxItemsSafety ?? _tasks[idx]; // Standard indexing
+                      final task = _tasks[idx];
                       return Card(
                         child: ListTile(
                           leading: Checkbox(
