@@ -223,7 +223,6 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
   void initState() {
     super.initState();
     _loadTasks();
-    // Start a timer to check task reminders every second
     _timerCheck = Timer.periodic(const Duration(seconds: 1), (timer) {
       _checkTaskAlerts();
     });
@@ -263,7 +262,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
         actions: [
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(h ? 'ਠीक है / ठीक' : 'OK'),
+            child: Text(h ? 'ठीक है' : 'OK'),
           ),
         ],
       ),
@@ -530,7 +529,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
                     padding: const EdgeInsets.all(12),
                     itemCount: _tasks.length,
                     itemBuilder: (context, idx) {
-                      final task = _tasks[idx];
+                      final task = _tasks.maxItemsSafety ?? _tasks[idx]; // Standard indexing
                       return Card(
                         child: ListTile(
                           leading: Checkbox(
@@ -568,4 +567,3 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
     );
   }
 }
-
