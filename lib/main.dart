@@ -2,8 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
-void main() {
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  tz.initializeTimeZones();
+
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings initializationSettings =
+      InitializationSettings(android: initializationSettingsAndroid);
+
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   runApp(const TaskApp());
 }
 
@@ -94,12 +109,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final prefs = await SharedPreferences.getInstance();
     bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
     if (isLoggedIn && mounted) {
-      String username = prefs.getString('username') ?? 'User';
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => MainTaskScreen(
-            username: username,
+            username: "Manoj Sharma",
             onToggleTheme: widget.onToggleTheme,
             isDarkMode: widget.isDarkMode,
             onChangeColor: widget.onChangeColor,
@@ -116,14 +130,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_usernameController.text.trim().isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isLoggedIn', true);
-    await prefs.setString('username', _usernameController.text.trim());
 
     if (mounted) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => MainTaskScreen(
-            username: _usernameController.text.trim(),
+            username: "Manoj Sharma",
             onToggleTheme: widget.onToggleTheme,
             isDarkMode: widget.isDarkMode,
             onChangeColor: widget.onChangeColor,
@@ -260,6 +273,34 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
     }
   }
 
+  Future<void> _scheduleAlarm(String title, DateTime scheduledTime, int id) async {
+    try {
+      const AndroidNotificationDetails androidPlatformChannelSpecifics =
+          AndroidNotificationDetails(
+        'task_channel_id',
+        'Task Alarms',
+        channelDescription: 'Channel for Task alarms and reminders',
+        importance: Importance.max,
+        priority: Priority.high,
+      );
+      const NotificationDetails platformChannelSpecifics =
+          NotificationDetails(android: androidPlatformChannelSpecifics);
+
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        id,
+        'Task Reminder: $title',
+        'It is time to complete your task!',
+        tz.TZDateTime.from(scheduledTime, tz.local),
+        platformChannelSpecifics,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e) {
+      print("Alarm error: $e");
+    }
+  }
+
   void _showColorPicker() {
     bool h = widget.isHindi;
     showModalBottomSheet(
@@ -307,6 +348,8 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
   void _showAddTaskDialog() {
     bool h = widget.isHindi;
     final titleController = TextEditingController();
+    TimeOfDay selectedTime = TimeOfDay.now();
+    
     List<String> categories = h 
         ? ['व्यक्तिगत', 'कार्य', 'फिटनेस', 'पढ़ाई', 'खरीदारी']
         : ['Personal', 'Work', 'Fitness', 'Study', 'Shopping'];
@@ -322,7 +365,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: Text(h ? 'नया कार्य जोड़ें' : 'Create New Task'),
+            title: Text(h ? 'नया कार्य और अलार्म जोड़ें' : 'Create Task & Alarm'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -345,6 +388,27 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
                     items: priorities.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
                     onChanged: (val) => setDialogState(() => priority = val!),
                   ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("${h ? 'अलार्म समय:' : 'Alarm Time:'} ${selectedTime.format(context)}"),
+                      TextButton(
+                        onPressed: () async {
+                          final TimeOfDay? time = await showTimePicker(
+                            context: context,
+                            initialTime: selectedTime,
+                          );
+                          if (time != null) {
+                            setDialogState(() {
+                              selectedTime = time;
+                            });
+                          }
+                        },
+                        child: Text(h ? 'समय बदलें' : 'Pick Time'),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -353,6 +417,22 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
               ElevatedButton(
                 onPressed: () {
                   if (titleController.text.trim().isEmpty) return;
+                  
+                  final now = DateTime.now();
+                  DateTime scheduledDateTime = DateTime(
+                    now.year,
+                    now.month,
+                    now.day,
+                    selectedTime.hour,
+                    selectedTime.minute,
+                  );
+
+                  if (scheduledDateTime.isBefore(now)) {
+                    scheduledDateTime = scheduledDateTime.add(const Duration(days: 1));
+                  }
+
+                  int notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
                   setState(() {
                     _tasks.add({
                       'title': titleController.text.trim(),
@@ -360,9 +440,12 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
                       'category': category,
                       'priority': priority,
                       'date': DateFormat('dd MMM yyyy').format(DateTime.now()),
+                      'time': selectedTime.format(context),
+                      'notifId': notificationId,
                     });
                   });
                   _saveTasks();
+                  _scheduleAlarm(titleController.text.trim(), scheduledDateTime, notificationId);
                   Navigator.pop(context);
                 },
                 child: Text(h ? 'सहेजें' : 'Save'),
@@ -421,7 +504,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('${h ? "स्वागत है" : "Welcome"}, ${widget.username}!', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text('${h ? "स्वागत है" : "Welcome"}, Manoj Sharma!', style: const TextStyle(fontWeight: FontWeight.bold)),
                     Text('${(progress * 100).toInt()}% ${h ? "पूरा हुआ" : "Done"}'),
                   ],
                 ),
@@ -472,7 +555,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
                               decoration: task['isDone'] ? TextDecoration.lineThrough : TextDecoration.none,
                             ),
                           ),
-                          subtitle: Text('${task['category']} • ${task['priority']} • ${task['date'] ?? ''}'),
+                          subtitle: Text('${task['category']} • ${task['priority']} • ⏰ ${task['time'] ?? ''}'),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
                             onPressed: () {
@@ -494,3 +577,4 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
     );
   }
 }
+
