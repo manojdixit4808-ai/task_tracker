@@ -2,23 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
+import 'dart:async';
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  tz.initializeTimeZones();
-
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-
-  const InitializationSettings initializationSettings =
-      InitializationSettings(android: initializationSettingsAndroid);
-
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+void main() {
   runApp(const TaskApp());
 }
 
@@ -231,11 +217,57 @@ class MainTaskScreen extends StatefulWidget {
 class _MainTaskScreenState extends State<MainTaskScreen> {
   List<Map<String, dynamic>> _tasks = [];
   String _selectedCategory = 'All';
+  Timer? _timerCheck;
 
   @override
   void initState() {
     super.initState();
     _loadTasks();
+    // Start a timer to check task reminders every second
+    _timerCheck = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _checkTaskAlerts();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timerCheck?.cancel();
+    super.dispose();
+  }
+
+  void _checkTaskAlerts() {
+    final now = DateTime.now();
+    String currentTimeStr = DateFormat('hh:mm a').format(now);
+    String currentDateStr = DateFormat('dd MMM yyyy').format(now);
+
+    for (var task in _tasks) {
+      if (task['isDone'] == false &&
+          task['date'] == currentDateStr &&
+          task['time'] == currentTimeStr &&
+          task['alertShown'] != true) {
+        task['alertShown'] = true;
+        _saveTasks();
+        _showTaskAlertDialog(task['title']);
+      }
+    }
+  }
+
+  void _showTaskAlertDialog(String title) {
+    if (!mounted) return;
+    bool h = widget.isHindi;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(h ? '⏰ कार्य का समय हो गया है!' : '⏰ Task Reminder!'),
+        content: Text('${h ? "कार्य:" : "Task:"} $title'),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(h ? 'ਠीक है / ठीक' : 'OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveTasks() async {
@@ -270,34 +302,6 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
           ),
         ),
       );
-    }
-  }
-
-  Future<void> _scheduleAlarm(String title, DateTime scheduledTime, int id) async {
-    try {
-      const AndroidNotificationDetails androidPlatformChannelSpecifics =
-          AndroidNotificationDetails(
-        'task_channel_id',
-        'Task Alarms',
-        channelDescription: 'Channel for Task alarms and reminders',
-        importance: Importance.max,
-        priority: Priority.high,
-      );
-      const NotificationDetails platformChannelSpecifics =
-          NotificationDetails(android: androidPlatformChannelSpecifics);
-
-      await flutterLocalNotificationsPlugin.zonedSchedule(
-        id,
-        'Task Reminder: $title',
-        'It is time to complete your task!',
-        tz.TZDateTime.from(scheduledTime, tz.local),
-        platformChannelSpecifics,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-    } catch (e) {
-      print("Alarm error: $e");
     }
   }
 
@@ -365,7 +369,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: Text(h ? 'नया कार्य और अलार्म जोड़ें' : 'Create Task & Alarm'),
+            title: Text(h ? 'नया कार्य और समय जोड़ें' : 'Create Task & Time'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -392,7 +396,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text("${h ? 'अलार्म समय:' : 'Alarm Time:'} ${selectedTime.format(context)}"),
+                      Text("${h ? 'समय:' : 'Time:'} ${selectedTime.format(context)}"),
                       TextButton(
                         onPressed: () async {
                           final TimeOfDay? time = await showTimePicker(
@@ -419,19 +423,7 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
                   if (titleController.text.trim().isEmpty) return;
                   
                   final now = DateTime.now();
-                  DateTime scheduledDateTime = DateTime(
-                    now.year,
-                    now.month,
-                    now.day,
-                    selectedTime.hour,
-                    selectedTime.minute,
-                  );
-
-                  if (scheduledDateTime.isBefore(now)) {
-                    scheduledDateTime = scheduledDateTime.add(const Duration(days: 1));
-                  }
-
-                  int notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+                  final dt = DateTime(now.year, now.month, now.day, selectedTime.hour, selectedTime.minute);
 
                   setState(() {
                     _tasks.add({
@@ -439,13 +431,12 @@ class _MainTaskScreenState extends State<MainTaskScreen> {
                       'isDone': false,
                       'category': category,
                       'priority': priority,
-                      'date': DateFormat('dd MMM yyyy').format(DateTime.now()),
-                      'time': selectedTime.format(context),
-                      'notifId': notificationId,
+                      'date': DateFormat('dd MMM yyyy').format(now),
+                      'time': DateFormat('hh:mm a').format(dt),
+                      'alertShown': false,
                     });
                   });
                   _saveTasks();
-                  _scheduleAlarm(titleController.text.trim(), scheduledDateTime, notificationId);
                   Navigator.pop(context);
                 },
                 child: Text(h ? 'सहेजें' : 'Save'),
